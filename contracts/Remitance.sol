@@ -68,16 +68,14 @@ contract Remitance {
         return true;
     }
     
-	
-	// pwd1 and pwd2 should be hashes created by the client.
-    function send(address destination uint deadlineBlock, bytes32 pwd1, bytes32 pwd2)
+    function send(address destination uint deadlineBlock, bytes32 pwd1Hash, bytes32 pwd2Hash)
         public 
         payable 
         returns(bool) {
             
             if(int(msg.value) - int(fee) < 0) revert();
             
-            bytes32 keyHash = keccak256(pwd1, pwd2);
+            bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
 
             require(!remitanceBook[keyHash].exists);
 
@@ -92,10 +90,10 @@ contract Remitance {
             return true;
     }
     
-    function checkRemitanceBalance(bytes32 pwd1, bytes32 pwd2)
+    function checkRemitanceBalance(bytes32 pwd1Hash, bytes32 pwd2Hash)
         constant
         returns(uint){
-            bytes32 keyHash = keccak256(pwd1, pwd2);
+            bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
             
             require(remitanceBook[keyHash].exists && 
                    (remitanceBook[keyHash].thirdParty == msg.sender || msg.sender == owner)
@@ -104,11 +102,11 @@ contract Remitance {
             return remitanceBook[keyHash].amount;
     }
     
-    function collect(bytes32 pwd1, bytes32 pwd2)
+    function collect(bytes32 pwd1Hash, bytes32 pwd2Hash)
         public 
         returns(bool){
             
-        bytes32 keyHash = keccak256(pwd1, pwd2);
+        bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
         
         require(remitanceBook[keyHash].exists &&  
                 remitanceBook[keyHash].destination == msg.sender && 
@@ -122,10 +120,10 @@ contract Remitance {
 		return true;
     }
 
-    function refund(bytes32 pwd1, bytes32 pwd2)
+    function refund(bytes32 pwd1Hash, bytes32 pwd2Hash)
         returns(bool){
             
-        bytes32 keyHash = keccak256(pwd1, pwd2);
+        bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
             
         require(remitanceBook[keyHash].exists && 
                 remitanceBook[keyHash].origin == msg.sender && 
