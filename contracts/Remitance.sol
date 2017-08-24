@@ -10,8 +10,7 @@ contract Remitance {
     
     struct TransactionStruct { 
         address origin; // Alice
-        address destination; // Bob
-        address thirdParty;
+        address destination; // Carol
         uint amount;
         uint deadlineBlock;
         bool exists;
@@ -21,10 +20,10 @@ contract Remitance {
     mapping(bytes32 => TransactionStruct) remitanceBook;
 
     event LogSetFees(uint newFee);
-    event LogWithdrawFees(uint balance, bool success);
-    event LogSend(address origin, address destination, address thirdParty, uint deadlineBlock, bytes32 keyHash);
-    event LogCollect(bytes32 keyHash, bool success);
-    event LogRefund(bytes32 keyHash, bool success);
+    event LogWithdrawFees(uint balance);
+    event LogSend(address origin, address destination, uint deadlineBlock, bytes32 keyHash);
+    event LogCollect(bytes32 keyHash);
+    event LogRefund(bytes32 keyHash);
     event LogKillSwitch();
 
     modifier restricted() {
@@ -51,7 +50,7 @@ contract Remitance {
         constant
         restricted
         returns(uint){
-            return feeBalance;
+        return feeBalance;
     }
     
     function withdrawAccumulatedFees()
@@ -59,17 +58,15 @@ contract Remitance {
         restricted 
         returns(bool) {
         
-        if(owner.send(feeBalance)){
-            LogWithdrawFees(feeBalance, true);
-            feeBalance = 0;
-            return true;
-        } else {
-            LogWithdrawFees(feeBalance, false);
-            return false;
-        }
+		feeBalance = 0;
+		LogWithdrawFees(feeBalance);
+		
+        return true;
     }
     
-    function send(address destination, address thirdParty, uint deadlineBlock, bytes32 pwd1, bytes32 pwd2)
+	
+	// pwd1 and pwd2 should be hashes created by the client.
+    function send(address destination uint deadlineBlock, bytes32 pwd1, bytes32 pwd2)
         public 
         payable 
         returns(bool) {
@@ -82,11 +79,11 @@ contract Remitance {
 
             bool hasDeadline = deadlineBlock > 0;
             
-            remitanceBook[keyHash] = TransactionStruct(msg.sender, destination, thirdParty, msg.value - fee, block.number + deadlineBlock, true, hasDeadline);
+            remitanceBook[keyHash] = TransactionStruct(msg.sender, destination, msg.value - fee, block.number + deadlineBlock, true, hasDeadline);
             
             feeBalance += fee;
             
-            LogSend(msg.sender, destination, thirdParty, deadlineBlock, keyHash);
+            LogSend(msg.sender, destination, deadlineBlock, keyHash);
             
             return true;
     }
@@ -110,18 +107,13 @@ contract Remitance {
         bytes32 keyHash = keccak256(pwd1, pwd2);
         
         require(remitanceBook[keyHash].exists &&  
-                remitanceBook[keyHash].thirdParty == msg.sender && 
+                remitanceBook[keyHash].destination == msg.sender && 
                 remitanceBook[keyHash].amount > 0 
                 );
         
-         if(remitanceBook[keyHash].destination.send(remitanceBook[keyHash].amount)){
-            remitanceBook[keyHash].exists = false;
-            LogCollect(keyHash, true);
-            return true;
-        } else {
-            LogCollect(keyHash, false);
-            return false;
-        }
+		LogCollect(keyHash);
+		
+		return true;
     }
 
     function refund(bytes32 pwd1, bytes32 pwd2)
@@ -138,14 +130,11 @@ contract Remitance {
             require(block.number > remitanceBook[keyHash].deadlineBlock);
         }
         
-        if(msg.sender.send(remitanceBook[keyHash].amount)){
-            remitanceBook[keyHash].exists = false;
-            LogRefund(keyHash, true);
-            return true;
-        } else {
-            LogRefund(keyHash, false);
-            return false;
-        }
+		msg.sender.send(remitanceBook[keyHash].amount);
+		
+		LogRefund(keyHash);
+		
+		return true;
     }
     
     
@@ -153,7 +142,7 @@ contract Remitance {
         public
         restricted {
         LogKillSwitch();
-        suicide(owner);
+        selfdestruct(owner);
     }
     
 }
