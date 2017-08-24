@@ -58,8 +58,12 @@ contract Remitance {
         restricted 
         returns(bool) {
         
+		uint amount = feeBalance;
 		feeBalance = 0;
-		LogWithdrawFees(feeBalance);
+		
+		LogWithdrawFees(amount);
+		
+		if(!owner.send(amount)) revert();
 		
         return true;
     }
@@ -113,6 +117,8 @@ contract Remitance {
         
 		LogCollect(keyHash);
 		
+		if(!msg.sender.send(remitanceBook[keyHash].amount)) revert();
+		
 		return true;
     }
 
@@ -130,9 +136,9 @@ contract Remitance {
             require(block.number > remitanceBook[keyHash].deadlineBlock);
         }
         
-		msg.sender.send(remitanceBook[keyHash].amount);
-		
 		LogRefund(keyHash);
+		
+		if(!msg.sender.send(remitanceBook[keyHash].amount)) revert();
 		
 		return true;
     }
