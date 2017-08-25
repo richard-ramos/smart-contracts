@@ -13,8 +13,8 @@ contract Remitance {
         address destination; // Carol
         uint amount;
         uint deadlineBlock;
-        bool exists;
         bool hasDeadline;
+        bool exists;
     }
     
     mapping(bytes32 => TransactionStruct) remitanceBook;
@@ -30,9 +30,9 @@ contract Remitance {
         if (msg.sender == owner) _;
     }
     
-    function Remitance() {
+    function Remitance(uint feeAmount) {
         owner = msg.sender;
-        fee = 200000;
+        fee = feeAmount;
         feeBalance = 0;
     }
 
@@ -48,7 +48,6 @@ contract Remitance {
     function checkAccumulatedFees()
         public
         constant
-        restricted
         returns(uint){
         return feeBalance;
     }
@@ -68,37 +67,43 @@ contract Remitance {
         return true;
     }
     
-    function send(address destination uint deadlineBlock, bytes32 pwd1Hash, bytes32 pwd2Hash)
+    function send(address dest, uint deadline, bytes32 pwd1Hash, bytes32 pwd2Hash)
         public 
         payable 
         returns(bool) {
             
-            if(int(msg.value) - int(fee) < 0) revert();
-            
-            bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
+            require(msg.value > fee);
+
+            bytes32 keyHash = calculateCombinedHash(pwd1Hash, pwd2Hash);
 
             require(!remitanceBook[keyHash].exists);
-
-            bool hasDeadline = deadlineBlock > 0;
             
-            remitanceBook[keyHash] = TransactionStruct(msg.sender, destination, msg.value - fee, block.number + deadlineBlock, true, hasDeadline);
+            remitanceBook[keyHash] = TransactionStruct({
+                                        origin: msg.sender, 
+                                        destination: dest, 
+                                        amount: msg.value - fee, 
+                                        deadlineBlock: block.number + deadline, 
+                                        hasDeadline: deadline > 0,
+                                        exists: true
+                                        });
             
             feeBalance += fee;
             
-            LogSend(msg.sender, destination, deadlineBlock, keyHash);
+            LogSend(msg.sender, dest, deadline, keyHash);
             
             return true;
     }
-    
+
+    function calculateCombinedHash(bytes32 pwd1Hash, bytes32 pwd2Hash)
+        constant 
+        returns(bytes32) {
+        return keccak256(pwd1Hash, pwd2Hash);
+    }
+
     function checkRemitanceBalance(bytes32 pwd1Hash, bytes32 pwd2Hash)
         constant
         returns(uint){
-            bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
-            
-            require(remitanceBook[keyHash].exists && 
-                   (remitanceBook[keyHash].thirdParty == msg.sender || msg.sender == owner)
-                );
-                
+            bytes32 keyHash = calculateCombinedHash(pwd1Hash, pwd2Hash);    
             return remitanceBook[keyHash].amount;
     }
     
@@ -106,12 +111,14 @@ contract Remitance {
         public 
         returns(bool){
             
-        bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
+        bytes32 keyHash = calculateCombinedHash(pwd1Hash, pwd2Hash);
         
-        require(remitanceBook[keyHash].exists &&  
-                remitanceBook[keyHash].destination == msg.sender && 
-                remitanceBook[keyHash].amount > 0 
+        require(remitanceBook[keyHash].destination == msg.sender && 
+                remitanceBook[keyHash].amount > 0 &&
+                remitanceBook[keyHash].exists
                 );
+
+        remitanceBook[keyHash].amount = 0;
         
 		LogCollect(keyHash);
 		
@@ -123,16 +130,18 @@ contract Remitance {
     function refund(bytes32 pwd1Hash, bytes32 pwd2Hash)
         returns(bool){
             
-        bytes32 keyHash = keccak256(pwd1Hash, pwd2Hash);
+        bytes32 keyHash = calculateCombinedHash(pwd1Hash, pwd2Hash);
             
-        require(remitanceBook[keyHash].exists && 
-                remitanceBook[keyHash].origin == msg.sender && 
-                remitanceBook[keyHash].amount > 0
+        require(remitanceBook[keyHash].origin == msg.sender && 
+                remitanceBook[keyHash].amount > 0 &&
+                remitanceBook[keyHash].exists
                 );
         
         if(remitanceBook[keyHash].hasDeadline){
             require(block.number > remitanceBook[keyHash].deadlineBlock);
         }
+
+        remitanceBook[keyHash].amount = 0;
         
 		LogRefund(keyHash);
 		
