@@ -17,7 +17,7 @@ contract Splitter {
 	
     event LogSplit(address sender, address rec1, address rec2, uint amount);
     event LogWithdraw(address to, bool success);
-    event LogKillSwitch();
+    event LogKillSwitch(address sender);
     
     function split(address rec1, address rec2) 
         public 
@@ -55,22 +55,21 @@ contract Splitter {
 
         require(amount > 0);
         
-        if(msg.sender.send(amount)){
-            balance[msg.sender] = 0;
-            LogWithdraw(msg.sender, true);
-            return true;
-        } else {
-            LogWithdraw(msg.sender, false);
-            return false;
-        }
+		balance[msg.sender] = 0;
+		
+		LogWithdraw(msg.sender, true);
+		
+		if(!msg.sender.send(amount)) throw;
+		
+		return true;
     }
     
     
     function killSwitch() 
         public
         restricted {
-        suicide(owner);
-        LogKillSwitch();
+        selfdestruct(owner);
+        LogKillSwitch(msg.sender);
     }
     
 }
